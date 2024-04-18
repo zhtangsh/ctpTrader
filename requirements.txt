@@ -1,13 +1,2 @@
-backtrader==1.9.78.123
-joblib==1.1.0
-pandas==1.3.5
-sqlalchemy==1.4.39
-openpyxl==3.0.10
-scipy==1.7.3
-rqdatac==2.11.11.4
-rqdatac-fund==1.0.28
-rqsdk==1.5.2
-matplotlib==3.5.3
-pymysql==1.0.2
-quantlib==1.31
-pyfolio>=0.9.1
+vnpy_ctptest
+vnpy_ctp
