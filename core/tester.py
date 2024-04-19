@@ -2,12 +2,12 @@ import logging
 from pathlib import Path
 from threading import Event
 
-# vnpy CTP 交易类
 # vnpy_ctp
+from typing import List
+
 from vnpy.trader.constant import Exchange
 from vnpy.trader.object import SubscribeRequest
 from vnpy_ctp.api import TdApi
-# 一堆常量
 from vnpy_ctp.api.ctp_constant import (THOST_FTDC_D_Buy, THOST_FTDC_D_Sell,
                                        THOST_FTDC_OF_Close,
                                        THOST_FTDC_OF_CloseToday,
@@ -18,6 +18,7 @@ from vnpy_ctp.api.ctp_constant import (THOST_FTDC_D_Buy, THOST_FTDC_D_Sell,
                                        THOST_FTDC_CC_Immediately, THOST_FTDC_FCC_NotForceClose, THOST_FTDC_TC_GFD,
                                        THOST_FTDC_VC_AV, THOST_FTDC_AF_Delete)
 
+from core.ctpmodel import *
 from utils import sys_utils
 
 logger = logging.getLogger(__name__)
@@ -106,17 +107,15 @@ class TestTdApi(TdApi):
         self.wait_event(req_id)
         return self.req_cache.get(req_id)
 
-    def query_position(self):
+    def query_position(self) -> List[CtpPosition]:
         req_id = self.get_req_id()
         self.reqQryInvestorPosition({}, req_id)
         self.wait_event(req_id)
         res = self.get_response(req_id)
-        return res
+        return [CtpPosition(r) for r in res]
 
     def onRspQryInvestorPosition(self, data, error, reqid, last):
         logger.debug(f"onRspAuthenticate: data={data},error={error},reqid={reqid},last={last}")
-        print('持仓查询成功', data['InstrumentID'], f"方向={DIRE_MAP[data['PosiDirection']]}", f"仓位={data['Position']}",
-              f"昨仓={data['YdPosition']}", f"今仓={data['TodayPosition']}")
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
@@ -190,19 +189,15 @@ class TestTdApi(TdApi):
         self.reqOrderAction(ctp_req, req_id)
         # self.wait_event(req_id)
 
-    def query_order(self):
+    def query_order(self) -> List[CtpOrder]:
         req_id = self.get_req_id()
         self.reqQryOrder({}, req_id)
         self.wait_event(req_id)
         res = self.get_response(req_id)
-        return res
+        return [CtpOrder(r) for r in res]
 
     def onRspQryOrder(self, data, error, reqid, last):
         logger.debug(f"onRspQryDepthMarketData: data={data},error={error},reqid={reqid},last={last}")
-
-        print('委托查询成功', data["InstrumentID"], f'时间={data["InsertTime"]}', f'订单号={data["OrderSysID"].strip()}',
-              f'方向={DIRE_MAP[data["Direction"]]}', f'开平={OFFSET_MAP[data["CombOffsetFlag"]]}',
-              f'状态={data["StatusMsg"]}')
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
@@ -216,9 +211,6 @@ class TestTdApi(TdApi):
 
     def onRspQryTradingAccount(self, data, error, reqid, last):
         logger.debug(f"onRspQryTradingAccount: data={data},error={error},reqid={reqid},last={last}")
-
-        print('资金信息查询成功', data['AccountID'], f'可用资金={data["Available"]}', f'当前保证金={data["CurrMargin"]}',
-              f'手续费={data["Commission"]}', f'持仓盈亏={data["PositionProfit"]}', f'平仓盈亏={data["CloseProfit"]}')
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
@@ -301,7 +293,8 @@ class TestTdApi(TdApi):
         if res_list is None:
             res_list = []
             self.req_cache[str(req_id)] = res_list
-        res_list.append(data)
+        if data:
+            res_list.append(data)
 
     def get_response(self, req_id):
         if str(req_id) not in self.req_cache:
@@ -338,23 +331,18 @@ class TestTdApi(TdApi):
         if data['SessionID'] == self.session_id and data['OrderSysID']:
             req_id = data['OrderRef']
             order_sys_id = data["OrderSysID"]
-            print('订单状态变化', data["InstrumentID"], f'订单号={data["OrderSysID"].strip()}', f'状态={data["StatusMsg"]}',
-                  f'price={data["LimitPrice"]} filled={data["VolumeTraded"]}')
             self.set_response(req_id, order_sys_id)
             self.set_event(req_id)
 
-    def query_trade(self):
+    def query_trade(self) -> List[CtpTrade]:
         req_id = self.get_req_id()
         self.reqQryTrade({}, req_id)
         self.wait_event(req_id)
         res = self.get_response(req_id)
-        return res
+        return [CtpTrade(r) for r in res]
 
     def onRspQryTrade(self, data, error, reqid, last):
         logger.debug(f"onRspQryTrade: data={data},error={error},reqid={reqid},last={last}")
-        print('成交查询', data["InstrumentID"], f'时间={data["TradeTime"]}', f'订单号={data["OrderSysID"].strip()}',
-              f'成交编号={data["TradeID"].strip()}', f'方向={DIRE_MAP[data["Direction"]]}',
-              f'开平={OFFSET_MAP[data["OffsetFlag"]]}')
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
@@ -378,7 +366,7 @@ OFFSET_MAP = {
 
 
 def test():
-    TD_SERVER = 'tcp://180.168.146.187:10130'  # 交易服务器
+    TD_SERVER = 'tcp://180.168.146.187:10201'  # 交易服务器
     BROKER_ID = '9999'  # 经纪商代码
     USER_ID = '224850'
     PASSWORD = 'q9yvcbw7RuHv@Zs'
@@ -390,9 +378,9 @@ def test():
                        app_id=APP_ID)
     td_api.connect()
     req_list = [
-        # SubscribeRequest('T2406', Exchange.CFFEX),
-        # SubscribeRequest('T2409', Exchange.CFFEX),
-        # SubscribeRequest('T2412', Exchange.CFFEX),
+        SubscribeRequest('T2406', Exchange.CFFEX),
+        SubscribeRequest('T2409', Exchange.CFFEX),
+        SubscribeRequest('T2412', Exchange.CFFEX),
         # SubscribeRequest('TS2406', Exchange.CFFEX),
         # SubscribeRequest('TS2409', Exchange.CFFEX),
         # SubscribeRequest('TS2412', Exchange.CFFEX),

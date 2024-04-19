@@ -1,4 +1,5 @@
 import logging
+import os
 from pathlib import Path
 
 
@@ -42,3 +43,10 @@ def logging_config(level=logging.INFO):
         level=level,
         format='%(asctime)s %(name)s %(levelname)-8s %(message)s'
     )
+
+
+def get_env(key, default_val=None):
+    val = os.getenv(key)
+    if val is None:
+        return default_val
+    return val

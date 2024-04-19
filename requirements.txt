@@ -1,2 +1,5 @@
 vnpy_ctptest
 vnpy_ctp
+python-dotenv
+flask==2.2.5
+flask_jsonrpc==2.2.2
