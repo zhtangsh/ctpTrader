@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 from threading import Event
 
@@ -25,7 +26,8 @@ logger = logging.getLogger(__name__)
 
 
 class TestTdApi(TdApi):
-    def __init__(self, address, user_id, password, broker_id, auth_code, app_id, group='ctptest'):
+    def __init__(self, address, user_id, password, broker_id, auth_code, app_id, group='ctptest',
+                 initial_password='q9yvcbw7RuHv@Zs'):
         super().__init__()
         self.address: str = address
         self.user_id: str = user_id
@@ -46,6 +48,7 @@ class TestTdApi(TdApi):
         self.session_id: str = ""
         self.event_dict = {}
         self.initial_event = None
+        self._initial_password = 'q9yvcbw7RuHv@Zs'
 
         self.req_id = 0  # 自增ID
 
@@ -79,6 +82,16 @@ class TestTdApi(TdApi):
         req_id = self.get_req_id()
         self.reqUserLogin(ctp_req, req_id)
 
+    def update_password(self):
+        ctp_req = {
+            'BrokerID': self.broker_id,
+            'UserID': self.user_id,
+            'OldPassword': self.password,
+            'NewPassword': self._initial_password
+        }
+        req_id = self.get_req_id()
+        self.reqUserPasswordUpdate(ctp_req, req_id)
+
     def authenticate(self) -> None:
         """
         发起授权验证
@@ -96,9 +109,9 @@ class TestTdApi(TdApi):
         req_id = self.get_req_id()
         logger.debug(f"authenticate:req={req_id}")
         self.reqAuthenticate(ctp_req, req_id)
-        # self.wait_event(req_id)
 
     def subscribe(self, req: SubscribeRequest):
+        logger.debug(f"subscribe:{req}")
         req_id = self.get_req_id()
         self.reqQryDepthMarketData({
             'InstrumentID': req.symbol,
@@ -114,8 +127,13 @@ class TestTdApi(TdApi):
         res = self.get_response(req_id)
         return [CtpPosition(r) for r in res]
 
+    def onRspUserPasswordUpdate(self, data, error, reqid, last):
+        logger.debug(f"onRspUserPasswordUpdate: data={data},error={error},reqid={reqid},last={last}")
+        self.password = self._initial_password
+        self.login()
+
     def onRspQryInvestorPosition(self, data, error, reqid, last):
-        logger.debug(f"onRspAuthenticate: data={data},error={error},reqid={reqid},last={last}")
+        logger.debug(f"onRspQryInvestorPosition: data={data},error={error},reqid={reqid},last={last}")
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
@@ -197,13 +215,14 @@ class TestTdApi(TdApi):
         return [CtpOrder(r) for r in res]
 
     def onRspQryOrder(self, data, error, reqid, last):
-        logger.debug(f"onRspQryDepthMarketData: data={data},error={error},reqid={reqid},last={last}")
+        logger.debug(f"onRspQryOrder: data={data},error={error},reqid={reqid},last={last}")
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
 
     def query_account(self):
         req_id = self.get_req_id()
+        logger.debug(f"query_account:req_id={req_id}")
         self.reqQryTradingAccount({}, req_id)
         self.wait_event(req_id)
         res = self.get_response(req_id)
@@ -259,6 +278,10 @@ class TestTdApi(TdApi):
             # 自动确认结算单
             self.settlement_info_confirm()
         else:
+            # CTP:首次登录必须修改密码，请修改密码后重新登录
+            if error['ErrorID'] == 140:
+                self.update_password()
+                return
             self.login_failed = True
             logger.info(f"交易服务器登录失败,data={data},error={error}")
 
@@ -304,6 +327,7 @@ class TestTdApi(TdApi):
     def get_req_id(self):
         self.req_id += 1
         logger.debug(f"get_req_id,req_id={self.req_id}")
+        time.sleep(0.1)
         return self.req_id
 
     def onRspError(self, error: dict, reqid: int, last: bool) -> None:
@@ -311,6 +335,7 @@ class TestTdApi(TdApi):
         请求报错回报
         """
         logger.info(f"onRspError: 交易接口报错,error={error},reqid={reqid},last={last}")
+        self.set_event(reqid)
 
     def onRspOrderInsert(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """
@@ -346,6 +371,17 @@ class TestTdApi(TdApi):
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
+
+
+def print_position(p_list: List[CtpPosition]):
+    for p in p_list:
+        logger.info(f"position:symbol={p.instrument_id},position={p.position},direction={DIRE_MAP[p.posi_direction]}")
+
+
+def print_trade(t_list: List[CtpTrade]):
+    for t in t_list:
+        logger.info(
+            f"trade:order_id={t.order_sys_id},symbol={t.instrument_id},direction={DIRE_MAP[t.direction]},offset={OFFSET_MAP[t.offset_flag]},trade_time={t.trade_time}")
 
 
 # 多空映射
@@ -413,5 +449,81 @@ def test():
     logger.info(f"trade:{res}")
 
 
+def query_price(td_api):
+    req_list = [
+        SubscribeRequest('T2406', Exchange.CFFEX),
+        SubscribeRequest('T2406', Exchange.CFFEX),
+        SubscribeRequest('TS2409', Exchange.CFFEX),
+        SubscribeRequest('TS2412', Exchange.CFFEX),
+    ]
+    for req in req_list:
+        res = td_api.subscribe(req)
+        logger.info(f"market_data:{res}")
+
+
+def place_and_hold(td_api: TestTdApi, req_list, cancel=False):
+    for req in req_list:
+        res = td_api.subscribe(req)
+        logger.info(f"subscribe res:{res}")
+        res = td_api.send_order(req.symbol, req.exchange.name, res['BidPrice1'], 2, THOST_FTDC_D_Buy,
+                                THOST_FTDC_OF_Open)
+        if cancel:
+            time.sleep(3)
+            td_api.cancel_order(res)
+
+
+def check_position(td_api: TestTdApi, close=False):
+    position_list = td_api.query_position()
+    print_position(position_list)
+    if not close:
+        return
+    for p in position_list:
+        if p.position > 0:
+            req = SubscribeRequest(p.instrument_id, Exchange.CFFEX)
+            res = td_api.subscribe(req)
+            logger.info(f"subscribe res:{res}")
+            if p.posi_direction == THOST_FTDC_PD_Long:
+                td_api.send_order(p.instrument_id, p.exchange_id, res['BidPrice1'], p.position, THOST_FTDC_D_Sell,
+                                  THOST_FTDC_OF_Close)
+            else:
+                td_api.send_order(p.instrument_id, p.exchange_id, res['BidPrice1'], p.position, THOST_FTDC_D_Buy,
+                                  THOST_FTDC_OF_Close)
+
+
+def test_dzqh():
+    TD_SERVER = 'tcp://180.166.103.37:51215'  # 交易服务器
+    BROKER_ID = '6666'  # 经纪商代码
+    USER_ID = '66680162'
+    PASSWORD = 'q9yvcbw7RuHv@Zs'
+    APP_ID = 'client_dlzh0222_alpha'
+    AUTH_CODE = 'SXEX6UAU35NPVAZY'
+    level = logging.DEBUG
+    sys_utils.logging_config(level=level)
+    td_api = TestTdApi(address=TD_SERVER, user_id=USER_ID, password=PASSWORD, broker_id=BROKER_ID, auth_code=AUTH_CODE,
+                       app_id=APP_ID)
+    td_api.connect()
+    req_list_1 = [
+        SubscribeRequest('T2409', Exchange.CFFEX),
+        SubscribeRequest('T2412', Exchange.CFFEX),
+    ]
+    req_list_2 = [
+        SubscribeRequest('TS2409', Exchange.CFFEX),
+        SubscribeRequest('TS2412', Exchange.CFFEX),
+    ]
+    # place_and_hold(td_api, req_list_1)
+    # place_and_hold(td_api, req_list_2,cancel=True)
+    # time.sleep(10)
+    check_position(td_api, True)
+
+
+"""
+Exchange.SHFE
+CU2406
+CU2407
+Exchange.DCE
+I2409
+I2501
+"""
+
 if __name__ == '__main__':
-    test()
+    test_dzqh()

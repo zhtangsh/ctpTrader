@@ -56,12 +56,13 @@ def get_trader(code: str = 'td') -> TestTdApi:
 #     return res
 #
 #
-# @jsonrpc.method("accountInfo.getAccountInfo")
-# def get_account_info() -> List[QmtAccountInfo]:
-#     trader = get_trader()
-#     res = trader.get_account_info()
-#     return res
-#
+@jsonrpc.method("accountInfo.getAccountInfo")
+def get_account_info() -> List[CtpTradingAccount]:
+    trader = get_trader()
+    res = trader.query_account()
+    return [CtpTradingAccount(r) for r in res]
+
+
 #
 # @jsonrpc.method("accountInfo.getStockAsset")
 # def get_stock_asset() -> QmtAsset:
