@@ -325,7 +325,6 @@ class TestTdApi(TdApi):
     def get_req_id(self):
         self.req_id += 1
         logger.debug(f"get_req_id,req_id={self.req_id}")
-        time.sleep(0.1)
         return self.req_id
 
     def onRspError(self, error: dict, reqid: int, last: bool) -> None:

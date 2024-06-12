@@ -83,7 +83,6 @@ class TestMdApi(MdApi):
     def live_tick_data(self, symbol):
         self.subscribe(symbol)
         value = self.redis_client.get(symbol)
-        logger.info(f"data:{value}")
         return json.loads(value)
 
     def onFrontConnected(self) -> None:
@@ -168,7 +167,6 @@ class TestMdApi(MdApi):
     def get_req_id(self):
         self.req_id += 1
         logger.debug(f"get_req_id,req_id={self.req_id}")
-        time.sleep(0.1)
         return self.req_id
 
     def onRspError(self, error: dict, reqid: int, last: bool) -> None:
