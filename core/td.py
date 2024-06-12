@@ -2,20 +2,14 @@ import logging
 import time
 from pathlib import Path
 from threading import Event
-
 # vnpy_ctp
 from typing import List
 
+from kafka import KafkaProducer
 from vnpy.trader.constant import Exchange
 from vnpy.trader.object import SubscribeRequest
 from vnpy_ctp.api import TdApi
-from vnpy_ctp.api.ctp_constant import (THOST_FTDC_D_Buy, THOST_FTDC_D_Sell,
-                                       THOST_FTDC_OF_Close,
-                                       THOST_FTDC_OF_CloseToday,
-                                       THOST_FTDC_OF_CloseYesterday,
-                                       THOST_FTDC_OF_Open,
-                                       THOST_FTDC_PD_Long,
-                                       THOST_FTDC_PD_Short, THOST_FTDC_OPT_LimitPrice, THOST_FTDC_HF_Speculation,
+from vnpy_ctp.api.ctp_constant import (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_HF_Speculation,
                                        THOST_FTDC_CC_Immediately, THOST_FTDC_FCC_NotForceClose, THOST_FTDC_TC_GFD,
                                        THOST_FTDC_VC_AV, THOST_FTDC_AF_Delete)
 
@@ -24,10 +18,13 @@ from utils import sys_utils
 
 logger = logging.getLogger(__name__)
 
+CTP_TRADE_TOPIC = sys_utils.get_env('CTP_TRADE_TOPIC', 'ctpTradeTest00')
+CTP_ORDER_TOPIC = sys_utils.get_env('CTP_ORDER_TOPIC', 'ctpOrderTest00')
+
 
 class TestTdApi(TdApi):
-    def __init__(self, address, user_id, password, broker_id, auth_code, app_id, group='ctptest',
-                 initial_password='q9yvcbw7RuHv@Zs'):
+    def __init__(self, address, user_id, password, broker_id, auth_code, app_id, kafka_client: KafkaProducer,
+                 group='ctptest'):
         super().__init__()
         self.address: str = address
         self.user_id: str = user_id
@@ -49,6 +46,7 @@ class TestTdApi(TdApi):
         self.event_dict = {}
         self.initial_event = None
         self._initial_password = 'q9yvcbw7RuHv@Zs'
+        self.kafka_client = kafka_client
 
         self.req_id = 0  # 自增ID
 
@@ -194,12 +192,12 @@ class TestTdApi(TdApi):
         res = self.get_response(req_id)
         return res
 
-    def cancel_order(self, order_sys_id):
+    def cancel_order(self, order_sys_id, exchange_id):
         ctp_req = {
             "BrokerID": self.broker_id,
             "InvestorID": self.user_id,
             "UserID": self.user_id,
-            "ExchangeID": Exchange.CFFEX.name,
+            "ExchangeID": exchange_id,
             "OrderSysID": order_sys_id,
             "ActionFlag": THOST_FTDC_AF_Delete,
         }
@@ -358,6 +356,12 @@ class TestTdApi(TdApi):
             order_sys_id = data["OrderSysID"]
             self.set_response(req_id, order_sys_id)
             self.set_event(req_id)
+        self.kafka_client.send(CTP_ORDER_TOPIC, data)
+
+    def onRtnTrade(self, data: dict) -> None:
+        """成交数据推送"""
+        logger.info(f"onRtnTrade:data={data}")
+        self.kafka_client.send(CTP_TRADE_TOPIC, data)
 
     def query_trade(self) -> List[CtpTrade]:
         req_id = self.get_req_id()
@@ -371,159 +375,3 @@ class TestTdApi(TdApi):
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
-
-
-def print_position(p_list: List[CtpPosition]):
-    for p in p_list:
-        logger.info(f"position:symbol={p.instrument_id},position={p.position},direction={DIRE_MAP[p.posi_direction]}")
-
-
-def print_trade(t_list: List[CtpTrade]):
-    for t in t_list:
-        logger.info(
-            f"trade:order_id={t.order_sys_id},symbol={t.instrument_id},direction={DIRE_MAP[t.direction]},offset={OFFSET_MAP[t.offset_flag]},trade_time={t.trade_time}")
-
-
-# 多空映射
-DIRE_MAP = {
-    THOST_FTDC_D_Sell: '做空',
-    THOST_FTDC_D_Buy: '做多',
-    THOST_FTDC_PD_Short: '空',
-    THOST_FTDC_PD_Long: '多',
-}
-
-# 开平映射
-OFFSET_MAP = {
-    THOST_FTDC_OF_Close: '平',
-    THOST_FTDC_OF_Open: '开',
-    THOST_FTDC_OF_CloseYesterday: '平昨',
-    THOST_FTDC_OF_CloseToday: '平今'
-}
-
-
-def test():
-    TD_SERVER = 'tcp://180.168.146.187:10201'  # 交易服务器
-    BROKER_ID = '9999'  # 经纪商代码
-    USER_ID = '224850'
-    PASSWORD = 'q9yvcbw7RuHv@Zs'
-    APP_ID = 'simnow_client_test'
-    AUTH_CODE = '0000000000000000'
-    level = logging.INFO
-    sys_utils.logging_config(level=level)
-    td_api = TestTdApi(address=TD_SERVER, user_id=USER_ID, password=PASSWORD, broker_id=BROKER_ID, auth_code=AUTH_CODE,
-                       app_id=APP_ID)
-    td_api.connect()
-    req_list = [
-        SubscribeRequest('T2406', Exchange.CFFEX),
-        SubscribeRequest('T2409', Exchange.CFFEX),
-        SubscribeRequest('T2412', Exchange.CFFEX),
-        # SubscribeRequest('TS2406', Exchange.CFFEX),
-        # SubscribeRequest('TS2409', Exchange.CFFEX),
-        # SubscribeRequest('TS2412', Exchange.CFFEX),
-        # SubscribeRequest('TF2406', Exchange.CFFEX),
-        # SubscribeRequest('TF2409', Exchange.CFFEX),
-        # SubscribeRequest('TF2412', Exchange.CFFEX),
-        # SubscribeRequest('IF2404', Exchange.CFFEX),
-        # SubscribeRequest('IF2409', Exchange.CFFEX),
-        # SubscribeRequest('IF2412', Exchange.CFFEX)
-    ]
-    res = td_api.query_position()
-    logger.info(f"position:{res}")
-    res = td_api.query_order()
-    logger.info(f"order:{res}")
-    for req in req_list:
-        res = td_api.subscribe(req)
-        logger.info(f"subscribe res:{res}")
-        res1 = td_api.send_order(req.symbol, req.exchange.name, res['LowerLimitPrice'], 1, THOST_FTDC_D_Buy,
-                                 THOST_FTDC_OF_Open)
-        logger.info(f"res1:{res1}")
-        td_api.cancel_order(res1)
-        # res2 = td_api.send_order(req.symbol, req.exchange.name, res['BidPrice1'], 1, THOST_FTDC_D_Sell,
-        #                          THOST_FTDC_OF_Open)
-        # logger.info(f"res1:{res2}")
-    res = td_api.query_order()
-    logger.info(f"order:{res}")
-    res = td_api.query_account()
-    logger.info(f"account:{res}")
-    res = td_api.query_trade()
-    logger.info(f"trade:{res}")
-
-
-def query_price(td_api):
-    req_list = [
-        SubscribeRequest('T2406', Exchange.CFFEX),
-        SubscribeRequest('T2406', Exchange.CFFEX),
-        SubscribeRequest('TS2409', Exchange.CFFEX),
-        SubscribeRequest('TS2412', Exchange.CFFEX),
-    ]
-    for req in req_list:
-        res = td_api.subscribe(req)
-        logger.info(f"market_data:{res}")
-
-
-def place_and_hold(td_api: TestTdApi, req_list, cancel=False):
-    for req in req_list:
-        res = td_api.subscribe(req)
-        logger.info(f"subscribe res:{res}")
-        res = td_api.send_order(req.symbol, req.exchange.name, res['BidPrice1'], 2, THOST_FTDC_D_Buy,
-                                THOST_FTDC_OF_Open)
-        if cancel:
-            time.sleep(3)
-            td_api.cancel_order(res)
-
-
-def check_position(td_api: TestTdApi, close=False):
-    position_list = td_api.query_position()
-    print_position(position_list)
-    if not close:
-        return
-    for p in position_list:
-        if p.position > 0:
-            req = SubscribeRequest(p.instrument_id, Exchange.CFFEX)
-            res = td_api.subscribe(req)
-            logger.info(f"subscribe res:{res}")
-            if p.posi_direction == THOST_FTDC_PD_Long:
-                td_api.send_order(p.instrument_id, p.exchange_id, res['BidPrice1'], p.position, THOST_FTDC_D_Sell,
-                                  THOST_FTDC_OF_Close)
-            else:
-                td_api.send_order(p.instrument_id, p.exchange_id, res['BidPrice1'], p.position, THOST_FTDC_D_Buy,
-                                  THOST_FTDC_OF_Close)
-
-
-def test_dzqh():
-    TD_SERVER = 'tcp://180.166.103.37:51215'  # 交易服务器
-    BROKER_ID = '6666'  # 经纪商代码
-    USER_ID = '66680162'
-    PASSWORD = 'q9yvcbw7RuHv@Zs'
-    APP_ID = 'client_dlzh0222_alpha'
-    AUTH_CODE = 'SXEX6UAU35NPVAZY'
-    level = logging.DEBUG
-    sys_utils.logging_config(level=level)
-    td_api = TestTdApi(address=TD_SERVER, user_id=USER_ID, password=PASSWORD, broker_id=BROKER_ID, auth_code=AUTH_CODE,
-                       app_id=APP_ID)
-    td_api.connect()
-    req_list_1 = [
-        SubscribeRequest('T2409', Exchange.CFFEX),
-        SubscribeRequest('T2412', Exchange.CFFEX),
-    ]
-    req_list_2 = [
-        SubscribeRequest('TS2409', Exchange.CFFEX),
-        SubscribeRequest('TS2412', Exchange.CFFEX),
-    ]
-    # place_and_hold(td_api, req_list_1)
-    # place_and_hold(td_api, req_list_2,cancel=True)
-    # time.sleep(10)
-    check_position(td_api, True)
-
-
-"""
-Exchange.SHFE
-CU2406
-CU2407
-Exchange.DCE
-I2409
-I2501
-"""
-
-if __name__ == '__main__':
-    test_dzqh()

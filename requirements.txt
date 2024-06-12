@@ -3,3 +3,4 @@ vnpy_ctp
 python-dotenv
 flask==2.2.5
 flask_jsonrpc==2.2.2
+kafka-python==2.0.2
