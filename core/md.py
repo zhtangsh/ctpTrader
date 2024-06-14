@@ -81,6 +81,7 @@ class TestMdApi(MdApi):
             self.wait_subscribe_event(symbol)
 
     def live_tick_data(self, symbol):
+        self.check_connection()
         self.subscribe(symbol)
         value = self.redis_client.get(symbol)
         return json.loads(value)
@@ -164,9 +165,11 @@ class TestMdApi(MdApi):
             return None
         return self.req_cache.pop(str(req_id))
 
-    def get_req_id(self):
-        if not self.login_status:
+    def check_connection(self):
+        if not self.connect_status:
             self.connect()
+
+    def get_req_id(self):
         self.req_id += 1
         logger.debug(f"get_req_id,req_id={self.req_id}")
         return self.req_id

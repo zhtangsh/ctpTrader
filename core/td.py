@@ -117,6 +117,7 @@ class TestTdApi(TdApi):
         return self.req_cache.get(req_id)
 
     def query_position(self) -> List[CtpPosition]:
+        self.check_connection()
         req_id = self.get_req_id()
         self.reqQryInvestorPosition({}, req_id)
         self.wait_event(req_id)
@@ -135,6 +136,7 @@ class TestTdApi(TdApi):
             self.set_event(reqid)
 
     def settlement_info_confirm(self):
+        self.check_connection()
         ctp_req: dict = {
             "BrokerID": self.broker_id,
             "InvestorID": self.user_id
@@ -162,6 +164,7 @@ class TestTdApi(TdApi):
         :param offset: 开平
         :return:
         """
+        self.check_connection()
         # 以下参数都是照着 vnpy 代码抄的
         req_id = self.get_req_id()
         ctp_req = {
@@ -191,6 +194,7 @@ class TestTdApi(TdApi):
         return res
 
     def cancel_order(self, order_sys_id, exchange_id):
+        self.check_connection()
         ctp_req = {
             "BrokerID": self.broker_id,
             "InvestorID": self.user_id,
@@ -204,6 +208,7 @@ class TestTdApi(TdApi):
         # self.wait_event(req_id)
 
     def query_order(self) -> List[CtpOrder]:
+        self.check_connection()
         req_id = self.get_req_id()
         self.reqQryOrder({}, req_id)
         self.wait_event(req_id)
@@ -217,6 +222,7 @@ class TestTdApi(TdApi):
             self.set_event(reqid)
 
     def query_account(self):
+        self.check_connection()
         req_id = self.get_req_id()
         logger.debug(f"query_account:req_id={req_id}")
         self.reqQryTradingAccount({}, req_id)
@@ -332,6 +338,10 @@ class TestTdApi(TdApi):
         logger.debug(f"get_req_id,req_id={self.req_id}")
         return self.req_id
 
+    def check_connection(self):
+        if not self.connect_status:
+            self.connect()
+
     def onRspError(self, error: dict, reqid: int, last: bool) -> None:
         """
         请求报错回报
@@ -368,6 +378,7 @@ class TestTdApi(TdApi):
         self.kafka_client.send(CTP_TRADE_TOPIC, data)
 
     def query_trade(self) -> List[CtpTrade]:
+        self.check_connection()
         req_id = self.get_req_id()
         self.reqQryTrade({}, req_id)
         self.wait_event(req_id)
