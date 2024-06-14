@@ -167,6 +167,7 @@ class TestMdApi(MdApi):
 
     def check_connection(self):
         if not self.connect_status:
+            logger.info("check_connection - 未连接到服务器，重新连接")
             self.connect()
 
     def get_req_id(self):
