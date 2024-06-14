@@ -104,6 +104,7 @@ class TestMdApi(MdApi):
         """
         if not error["ErrorID"]:
             self.login_status = True
+            self.connect_status = True
             logger.info(f"行情服务器登录成功,data={data},reqid={reqid},error={error},last={last}")
         else:
             logger.info(f"行情服务器登录失败,error={error}")

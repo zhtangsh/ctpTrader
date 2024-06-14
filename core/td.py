@@ -280,6 +280,7 @@ class TestTdApi(TdApi):
             self.front_id = data["FrontID"]
             self.session_id = data["SessionID"]
             self.login_status = True
+            self.connect_status = True
             logger.info(f"交易服务器登录成功,data={data},error={error}")
 
             # 自动确认结算单
