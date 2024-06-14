@@ -5,6 +5,8 @@ from flask import Flask
 from flask_jsonrpc import JSONRPC
 from kafka import KafkaProducer
 import redis
+import exchange_calendars as xcals
+
 
 from core.ctpmodel import *
 from utils import sys_utils
@@ -140,6 +142,10 @@ def live_tick_data(
     data = market_data.live_tick_data(symbol)
     return data
 
+@jsonrpc.method("utils.is_trading_day")
+def is_trading_day() -> bool:
+    xshg = xcals.get_calendar("XSHG")
+    return xshg.is_session(datetime.date.today())
 
 if __name__ == '__main__':
     level = logging.INFO
