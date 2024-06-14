@@ -1,12 +1,10 @@
 import logging
-import time
 from pathlib import Path
 from threading import Event
 # vnpy_ctp
 from typing import List
 
 from kafka import KafkaProducer
-from vnpy.trader.constant import Exchange
 from vnpy.trader.object import SubscribeRequest
 from vnpy_ctp.api import TdApi
 from vnpy_ctp.api.ctp_constant import (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_HF_Speculation,
@@ -247,6 +245,11 @@ class TestTdApi(TdApi):
         else:
             self.login()
 
+    def onFrontDisconnected(self, reason: int) -> None:
+        """服务器连接断开回报"""
+        logger.info(f"交易服务器连接断开,原因:{reason}")
+        self.login_status = False
+
     def onRspAuthenticate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """
         用户授权验证回报
@@ -323,6 +326,8 @@ class TestTdApi(TdApi):
         return self.req_cache.pop(str(req_id))
 
     def get_req_id(self):
+        if not self.login_status:
+            self.connect()
         self.req_id += 1
         logger.debug(f"get_req_id,req_id={self.req_id}")
         return self.req_id
