@@ -42,6 +42,7 @@ class TestTdApi(TdApi):
         self.app_id: str = app_id
         self.group = group
         self.name = 'td'
+        self.initialize_status: bool = False
         self.connect_status: bool = False
         self.auth_status: bool = False
         self.auth_failed: bool = False
@@ -69,6 +70,7 @@ class TestTdApi(TdApi):
             self.createFtdcTraderApi(f"{str(path)}\\{self.name}")
             self.registerFront(self.address)
             self.init()
+            self.initialize_status = True
             self.initial_event.wait()
             self.connect_status = True
         else:
@@ -256,16 +258,15 @@ class TestTdApi(TdApi):
         交易服务器连接成功
         """
         logger.info(f"交易服务器连接成功:{self.address}")
-        if self.auth_code:
+        if self.initialize_status:
             self.authenticate()
-        else:
-            self.login()
 
     def onFrontDisconnected(self, reason: int) -> None:
         """服务器连接断开回报"""
         logger.info(f"交易服务器连接断开,原因:{reason}")
         self.login_status = False
         self.connect_status = False
+        self.initialize_status = False
 
     def onRspAuthenticate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """
