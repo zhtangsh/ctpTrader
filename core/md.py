@@ -69,6 +69,11 @@ class TestMdApi(MdApi):
         logger.info(f"login:{ctp_req}")
         self.reqUserLogin(ctp_req, req_id)
 
+    def maintain_subscription(self):
+        for symbol in self.subscribe_set:
+            self.subscribeMarketData(symbol)
+            self.wait_subscribe_event(symbol)
+
     def subscribe(self, symbol) -> None:
         """
         订阅行情
@@ -92,6 +97,7 @@ class TestMdApi(MdApi):
         """
         logger.info("行情服务器连接成功")
         self.login()
+        self.maintain_subscription()
 
     def onFrontDisconnected(self, reason: int) -> None:
         """服务器连接断开回报"""
