@@ -19,6 +19,16 @@ logger = logging.getLogger(__name__)
 CTP_TRADE_TOPIC = sys_utils.get_env('CTP_TRADE_TOPIC', 'ctpTradeTest00')
 CTP_ORDER_TOPIC = sys_utils.get_env('CTP_ORDER_TOPIC', 'ctpOrderTest00')
 
+"""
+常规流程
+1. 初始化ctp
+2. 连接交易服务器(onFrontConnected)
+3. 验证auth code(reqAuthenticate)
+4. 登陆帐户(reqUserLogin)
+连接中断:
+1. onFrontDisconnected，此时不能走：验证auth code-> 登陆帐户(reqUserLogin)的流程，需要重新初始化ctp，否则会报{'ErrorID': 7, 'ErrorMsg': 'CTP:还没有初始化'}
+"""
+
 
 class TestTdApi(TdApi):
     def __init__(self, address, user_id, password, broker_id, auth_code, app_id, kafka_client: KafkaProducer,
@@ -255,6 +265,7 @@ class TestTdApi(TdApi):
         """服务器连接断开回报"""
         logger.info(f"交易服务器连接断开,原因:{reason}")
         self.login_status = False
+        self.connect_status = False
 
     def onRspAuthenticate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """
