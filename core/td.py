@@ -66,12 +66,17 @@ class TestTdApi(TdApi):
         """
 
         if not self.connect_status:
+            logger.debug("尝试连接到前置机")
             path: Path = sys_utils.get_folder_path(self.group.lower())
             self.initial_event = Event()
+            logger.debug("尝试createFtdcTraderApi")
             self.createFtdcTraderApi(f"{str(path)}\\{self.name}")
+            logger.debug("尝试registerFront")
             self.registerFront(self.address)
+            logger.debug("尝试init")
             self.init()
             self.initialize_status = True
+            logger.debug("等待连接信息")
             self.initial_event.wait()
             self.connect_status = True
         else:
