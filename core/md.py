@@ -81,6 +81,7 @@ class TestMdApi(MdApi):
         if not self.login_status:
             return
         if symbol not in self.subscribe_set:
+            logger.info(f"{symbol}不在订阅集合中，调用接口进行订阅")
             self.subscribeMarketData(symbol)
             self.subscribe_set.add(symbol)
             self.wait_subscribe_event(symbol)
@@ -88,7 +89,9 @@ class TestMdApi(MdApi):
     def live_tick_data(self, symbol):
         self.check_connection()
         self.subscribe(symbol)
+        logger.debug("尝试从redis读取数据")
         value = self.redis_client.get(symbol)
+        logger.debug(f"从redis读取数据,值为:{value}")
         return json.loads(value)
 
     def onFrontConnected(self) -> None:
@@ -135,9 +138,9 @@ class TestMdApi(MdApi):
         event.wait()
 
     def set_subscribe_event(self, symbol):
-        logger.debug(f"set_subscribe_event:symbol={symbol},event_dict={self.subscribe_event_dict}")
         if symbol not in self.subscribe_event_dict:
             return
+        logger.debug(f"set_subscribe_event:symbol={symbol},event_dict={self.subscribe_event_dict}")
         event = self.subscribe_event_dict.pop(symbol)
         if event is not None:
             event.set()
