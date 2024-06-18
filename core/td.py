@@ -59,6 +59,7 @@ class TestTdApi(TdApi):
         self.kafka_client = kafka_client
 
         self.req_id = 0  # 自增ID
+        self.event_timeout = 2.0
 
     def connect(self) -> None:
         """
@@ -77,7 +78,7 @@ class TestTdApi(TdApi):
             self.init()
             self.initialize_status = True
             logger.debug("等待连接信息")
-            self.initial_event.wait()
+            self.initial_event.wait(timeout=self.event_timeout)
             self.connect_status = True
         else:
             self.authenticate()
@@ -326,7 +327,7 @@ class TestTdApi(TdApi):
         logger.debug(f"wait_event,req_id={req_id},event_dict={self.event_dict}")
         event = Event()
         self.event_dict[str(req_id)] = event
-        event.wait()
+        event.wait(timeout=self.event_timeout)
 
     def set_event(self, req_id):
         logger.debug(f"set_event:{req_id},event_dict={self.event_dict}")
