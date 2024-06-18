@@ -148,9 +148,9 @@ def is_trading_day() -> bool:
     return xshg.is_session(datetime.date.today())
 
 
+level = logging.INFO
+sys_utils.logging_config(level=level)
+logging.getLogger("core.td").setLevel(logging.DEBUG)
+logging.getLogger("core.md").setLevel(logging.DEBUG)
 if __name__ == '__main__':
-    level = logging.INFO
-    sys_utils.logging_config(level=level)
-    logging.getLogger("core.td").setLevel(logging.DEBUG)
-    logging.getLogger("core.md").setLevel(logging.DEBUG)
     app.run(host='0.0.0.0', port=8000)
