@@ -153,4 +153,4 @@ if __name__ == '__main__':
     sys_utils.logging_config(level=level)
     logging.getLogger("core.td").setLevel(logging.DEBUG)
     logging.getLogger("core.md").setLevel(logging.DEBUG)
-    app.run(host='0.0.0.0', port=5000)
+    app.run(host='0.0.0.0', port=8000)
