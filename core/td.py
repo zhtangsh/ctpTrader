@@ -54,6 +54,7 @@ class TestTdApi(TdApi):
         self.session_id: str = ""
         self.event_dict = {}
         self.initial_event = None
+        self.disconnected_code = -1
         self._initial_password = 'q9yvcbw7RuHv@Zs'
         self.kafka_client = kafka_client
 
@@ -259,6 +260,7 @@ class TestTdApi(TdApi):
         """
         logger.info(f"交易服务器连接成功:{self.address}")
         if self.initialize_status:
+            logger.debug("ctp已初始化，尝试登陆")
             self.authenticate()
 
     def onFrontDisconnected(self, reason: int) -> None:
@@ -267,6 +269,7 @@ class TestTdApi(TdApi):
         self.login_status = False
         self.connect_status = False
         self.initialize_status = False
+        self.disconnected_code = reason
 
     def onRspAuthenticate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """
