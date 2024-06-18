@@ -59,7 +59,7 @@ class TestTdApi(TdApi):
         self.kafka_client = kafka_client
 
         self.req_id = 0  # 自增ID
-        self.event_timeout = 2.0
+        self.event_timeout = 60.0
 
     def connect(self) -> None:
         """
