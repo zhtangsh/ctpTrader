@@ -1,12 +1,10 @@
+import json
 import logging
-import time
 from pathlib import Path
 from threading import Event
 
 from redis import StrictRedis
-
 from vnpy_ctp.api import MdApi
-import json
 
 from utils import sys_utils
 
@@ -128,7 +126,7 @@ class TestMdApi(MdApi):
         """
         交易服务器连接成功
         """
-        logger.info(f"交易服务器连接成功:{self.address}")
+        logger.info(f"行情服务器连接成功:{self.address}")
         self.login()
 
     def wait_subscribe_event(self, symbol):

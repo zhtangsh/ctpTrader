@@ -79,7 +79,6 @@ class TestTdApi(TdApi):
             self.initialize_status = True
             logger.debug("等待连接信息")
             self.initial_event.wait(timeout=self.event_timeout)
-            self.connect_status = True
         else:
             self.authenticate()
 
@@ -265,6 +264,7 @@ class TestTdApi(TdApi):
         交易服务器连接成功
         """
         logger.info(f"交易服务器连接成功:{self.address}")
+        self.connect_status = True
         if self.initialize_status:
             logger.debug("ctp已初始化，尝试登陆")
             self.authenticate()
@@ -301,7 +301,6 @@ class TestTdApi(TdApi):
             self.front_id = data["FrontID"]
             self.session_id = data["SessionID"]
             self.login_status = True
-            self.connect_status = True
             logger.info(f"交易服务器登录成功,data={data},error={error}")
 
             # 自动确认结算单
@@ -359,6 +358,9 @@ class TestTdApi(TdApi):
         return self.req_id
 
     def check_connection(self):
+        if self.connect_status and not self.login_status:
+            logger.info("check_connection - 连接到服务器，但是未登陆，尝试重新登陆")
+            self.authenticate()
         if not self.connect_status:
             logger.info("check_connection - 未连接到服务器，重新连接")
             self.connect()
