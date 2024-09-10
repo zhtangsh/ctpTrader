@@ -1,3 +1,4 @@
+import json
 import logging
 import time
 from pathlib import Path
@@ -6,25 +7,36 @@ from threading import Event
 from typing import List
 
 from kafka import KafkaProducer
-from vnpy.trader.constant import Exchange
 from vnpy.trader.object import SubscribeRequest
 from vnpy_ctp.api import TdApi
 from vnpy_ctp.api.ctp_constant import (THOST_FTDC_OPT_LimitPrice, THOST_FTDC_HF_Speculation,
                                        THOST_FTDC_CC_Immediately, THOST_FTDC_FCC_NotForceClose, THOST_FTDC_TC_GFD,
                                        THOST_FTDC_VC_AV, THOST_FTDC_AF_Delete)
 
-from core.ctpmodel import *
+from ctpApi.ctpmodel import *
 from utils import sys_utils
 
 logger = logging.getLogger(__name__)
 
 CTP_TRADE_TOPIC = sys_utils.get_env('CTP_TRADE_TOPIC', 'ctpTradeTest00')
 CTP_ORDER_TOPIC = sys_utils.get_env('CTP_ORDER_TOPIC', 'ctpOrderTest00')
+API_REF = {}
+EXIT_API_SET = set()
+
+"""
+常规流程
+1. 初始化ctp
+2. 连接交易服务器(onFrontConnected)
+3. 验证auth code(reqAuthenticate)
+4. 登陆帐户(reqUserLogin)
+连接中断:
+1. onFrontDisconnected，此时不能走：验证auth code-> 登陆帐户(reqUserLogin)的流程，需要重新初始化ctp，否则会报{'ErrorID': 7, 'ErrorMsg': 'CTP:还没有初始化'}
+"""
 
 
 class TestTdApi(TdApi):
     def __init__(self, address, user_id, password, broker_id, auth_code, app_id, kafka_client: KafkaProducer,
-                 group='ctptest'):
+                 name='td', group='ctptest'):
         super().__init__()
         self.address: str = address
         self.user_id: str = user_id
@@ -33,7 +45,8 @@ class TestTdApi(TdApi):
         self.auth_code: str = auth_code
         self.app_id: str = app_id
         self.group = group
-        self.name = 'td'
+        self.name = name
+        self.initialize_status: bool = False
         self.connect_status: bool = False
         self.auth_status: bool = False
         self.auth_failed: bool = False
@@ -45,10 +58,12 @@ class TestTdApi(TdApi):
         self.session_id: str = ""
         self.event_dict = {}
         self.initial_event = None
+        self.disconnected_code = -1
         self._initial_password = 'q9yvcbw7RuHv@Zs'
         self.kafka_client = kafka_client
 
         self.req_id = 0  # 自增ID
+        self.event_timeout = 60.0
 
     def connect(self) -> None:
         """
@@ -56,13 +71,18 @@ class TestTdApi(TdApi):
         """
 
         if not self.connect_status:
+            logger.debug("尝试连接到前置机")
             path: Path = sys_utils.get_folder_path(self.group.lower())
             self.initial_event = Event()
+            logger.debug("尝试createFtdcTraderApi")
             self.createFtdcTraderApi(f"{str(path)}\\{self.name}")
+            logger.debug("尝试registerFront")
             self.registerFront(self.address)
+            logger.debug("尝试init")
             self.init()
-            self.initial_event.wait()
-            self.connect_status = True
+            self.initialize_status = True
+            logger.debug("等待连接信息")
+            self.initial_event.wait(timeout=self.event_timeout)
         else:
             self.authenticate()
 
@@ -119,6 +139,7 @@ class TestTdApi(TdApi):
         return self.req_cache.get(req_id)
 
     def query_position(self) -> List[CtpPosition]:
+        self.check_connection()
         req_id = self.get_req_id()
         self.reqQryInvestorPosition({}, req_id)
         self.wait_event(req_id)
@@ -137,6 +158,7 @@ class TestTdApi(TdApi):
             self.set_event(reqid)
 
     def settlement_info_confirm(self):
+        self.check_connection()
         ctp_req: dict = {
             "BrokerID": self.broker_id,
             "InvestorID": self.user_id
@@ -164,6 +186,7 @@ class TestTdApi(TdApi):
         :param offset: 开平
         :return:
         """
+        self.check_connection()
         # 以下参数都是照着 vnpy 代码抄的
         req_id = self.get_req_id()
         ctp_req = {
@@ -193,6 +216,7 @@ class TestTdApi(TdApi):
         return res
 
     def cancel_order(self, order_sys_id, exchange_id):
+        self.check_connection()
         ctp_req = {
             "BrokerID": self.broker_id,
             "InvestorID": self.user_id,
@@ -206,6 +230,7 @@ class TestTdApi(TdApi):
         # self.wait_event(req_id)
 
     def query_order(self) -> List[CtpOrder]:
+        self.check_connection()
         req_id = self.get_req_id()
         self.reqQryOrder({}, req_id)
         self.wait_event(req_id)
@@ -219,6 +244,7 @@ class TestTdApi(TdApi):
             self.set_event(reqid)
 
     def query_account(self):
+        self.check_connection()
         req_id = self.get_req_id()
         logger.debug(f"query_account:req_id={req_id}")
         self.reqQryTradingAccount({}, req_id)
@@ -242,10 +268,19 @@ class TestTdApi(TdApi):
         交易服务器连接成功
         """
         logger.info(f"交易服务器连接成功:{self.address}")
-        if self.auth_code:
+        self.connect_status = True
+        if self.initialize_status:
+            logger.debug("ctp已初始化，尝试登陆")
             self.authenticate()
-        else:
-            self.login()
+
+    def onFrontDisconnected(self, reason: int) -> None:
+        """服务器连接断开回报"""
+        logger.info(f"交易服务器连接断开,原因:{reason}")
+        self.login_status = False
+        self.connect_status = False
+        self.initialize_status = False
+        self.disconnected_code = reason
+        EXIT_API_SET.add(self.name)
 
     def onRspAuthenticate(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """
@@ -296,7 +331,7 @@ class TestTdApi(TdApi):
         logger.debug(f"wait_event,req_id={req_id},event_dict={self.event_dict}")
         event = Event()
         self.event_dict[str(req_id)] = event
-        event.wait()
+        event.wait(timeout=self.event_timeout)
 
     def set_event(self, req_id):
         logger.debug(f"set_event:{req_id},event_dict={self.event_dict}")
@@ -325,8 +360,15 @@ class TestTdApi(TdApi):
     def get_req_id(self):
         self.req_id += 1
         logger.debug(f"get_req_id,req_id={self.req_id}")
-        time.sleep(0.1)
         return self.req_id
+
+    def check_connection(self):
+        if self.connect_status and not self.login_status:
+            logger.info("check_connection - 连接到服务器，但是未登陆，尝试重新登陆")
+            self.authenticate()
+        if not self.connect_status:
+            logger.info("check_connection - 未连接到服务器，重新连接")
+            self.connect()
 
     def onRspError(self, error: dict, reqid: int, last: bool) -> None:
         """
@@ -364,6 +406,7 @@ class TestTdApi(TdApi):
         self.kafka_client.send(CTP_TRADE_TOPIC, data)
 
     def query_trade(self) -> List[CtpTrade]:
+        self.check_connection()
         req_id = self.get_req_id()
         self.reqQryTrade({}, req_id)
         self.wait_event(req_id)
@@ -375,3 +418,28 @@ class TestTdApi(TdApi):
         self.append_response(reqid, data)
         if last:
             self.set_event(reqid)
+
+
+def get_trader(code: str = 'td') -> TestTdApi:
+    if code in EXIT_API_SET:
+        logger.info(f"{code}属于待退出状态")
+        EXIT_API_SET.remove(code)
+        api = API_REF.pop(code)
+        logger.info(f"{code}运行exit")
+        ok = api.exit()
+        logger.info(f"{code} exit运行结果:{ok}")
+    if code not in API_REF:
+        logger.info("构建td api")
+        td_server = sys_utils.get_env('CTP_TD_SERVER', 'tcp://180.168.146.187:10201')
+        broker_id = sys_utils.get_env('CTP_BROKER_ID', '9999')
+        user_id = sys_utils.get_env('CTP_USER_ID', '224850')
+        password = sys_utils.get_env('CTP_PASSWORD', 'q9yvcbw7RuHv@Zs')
+        auth_code = sys_utils.get_env('CTP_AUTH_CODE', '0000000000000000')
+        app_id = sys_utils.get_env('CTP_APP_ID', 'simnow_client_test')
+        kafka_url = sys_utils.get_env('KAFKA_URL', '192.168.1.60:9092')
+        producer = KafkaProducer(bootstrap_servers=kafka_url, value_serializer=lambda v: json.dumps(v).encode('utf-8'))
+        td_api = TestTdApi(address=td_server, user_id=user_id, password=password, broker_id=broker_id,
+                           auth_code=auth_code, app_id=app_id, kafka_client=producer, name=code)
+        td_api.connect()
+        API_REF[code] = td_api
+    return API_REF[code]

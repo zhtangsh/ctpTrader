@@ -1,12 +1,11 @@
+import json
 import logging
 import time
 from pathlib import Path
 from threading import Event
 
-from redis import StrictRedis
-
+import redis
 from vnpy_ctp.api import MdApi
-import json
 
 from utils import sys_utils
 
@@ -14,10 +13,13 @@ from utils import sys_utils
 
 logger = logging.getLogger(__name__)
 
+API_REF = {}
+EXIT_API_SET = set()
+
 
 class TestMdApi(MdApi):
-    def __init__(self, address, user_id, password, broker_id, auth_code, app_id, redis_client: StrictRedis,
-                 group='ctptest'):
+    def __init__(self, address, user_id, password, broker_id, auth_code, app_id, redis_client: redis.StrictRedis,
+                 name='md', group='ctptest'):
         super().__init__()
         self.address: str = address
         self.user_id: str = user_id
@@ -26,7 +28,7 @@ class TestMdApi(MdApi):
         self.auth_code: str = auth_code
         self.app_id: str = app_id
         self.group = group
-        self.name = 'md'
+        self.name = name
         self.connect_status: bool = False
         self.auth_status: bool = False
         self.auth_failed: bool = False
@@ -69,6 +71,11 @@ class TestMdApi(MdApi):
         logger.info(f"login:{ctp_req}")
         self.reqUserLogin(ctp_req, req_id)
 
+    def maintain_subscription(self):
+        for symbol in self.subscribe_set:
+            self.subscribeMarketData(symbol)
+            self.wait_subscribe_event(symbol)
+
     def subscribe(self, symbol) -> None:
         """
         订阅行情
@@ -76,14 +83,17 @@ class TestMdApi(MdApi):
         if not self.login_status:
             return
         if symbol not in self.subscribe_set:
+            logger.info(f"{symbol}不在订阅集合中，调用接口进行订阅")
             self.subscribeMarketData(symbol)
             self.subscribe_set.add(symbol)
             self.wait_subscribe_event(symbol)
 
     def live_tick_data(self, symbol):
+        self.check_connection()
         self.subscribe(symbol)
+        logger.debug("尝试从redis读取数据")
         value = self.redis_client.get(symbol)
-        logger.info(f"data:{value}")
+        logger.debug(f"从redis读取数据,值为:{value}")
         return json.loads(value)
 
     def onFrontConnected(self) -> None:
@@ -92,11 +102,13 @@ class TestMdApi(MdApi):
         """
         logger.info("行情服务器连接成功")
         self.login()
+        self.maintain_subscription()
 
     def onFrontDisconnected(self, reason: int) -> None:
         """服务器连接断开回报"""
         logger.info(f"行情服务器连接断开，原因{reason}")
         self.login_status = False
+        EXIT_API_SET.add(self.name)
 
     def onRspUserLogin(self, data: dict, error: dict, reqid: int, last: bool) -> None:
         """
@@ -104,6 +116,7 @@ class TestMdApi(MdApi):
         """
         if not error["ErrorID"]:
             self.login_status = True
+            self.connect_status = True
             logger.info(f"行情服务器登录成功,data={data},reqid={reqid},error={error},last={last}")
         else:
             logger.info(f"行情服务器登录失败,error={error}")
@@ -118,7 +131,7 @@ class TestMdApi(MdApi):
         """
         交易服务器连接成功
         """
-        logger.info(f"交易服务器连接成功:{self.address}")
+        logger.info(f"行情服务器连接成功:{self.address}")
         self.login()
 
     def wait_subscribe_event(self, symbol):
@@ -128,9 +141,9 @@ class TestMdApi(MdApi):
         event.wait()
 
     def set_subscribe_event(self, symbol):
-        logger.debug(f"set_subscribe_event:symbol={symbol},event_dict={self.subscribe_event_dict}")
         if symbol not in self.subscribe_event_dict:
             return
+        logger.debug(f"set_subscribe_event:symbol={symbol},event_dict={self.subscribe_event_dict}")
         event = self.subscribe_event_dict.pop(symbol)
         if event is not None:
             event.set()
@@ -165,10 +178,14 @@ class TestMdApi(MdApi):
             return None
         return self.req_cache.pop(str(req_id))
 
+    def check_connection(self):
+        if not self.connect_status:
+            logger.info("check_connection - 未连接到服务器，重新连接")
+            self.connect()
+
     def get_req_id(self):
         self.req_id += 1
         logger.debug(f"get_req_id,req_id={self.req_id}")
-        time.sleep(0.1)
         return self.req_id
 
     def onRspError(self, error: dict, reqid: int, last: bool) -> None:
@@ -198,3 +215,36 @@ class TestMdApi(MdApi):
             return
         self.redis_client.set(key, json.dumps(data))
         self.set_subscribe_event(key)
+
+
+def get_market_data(code: str = 'md') -> TestMdApi:
+    logger.info(f"md API_REF:{API_REF}")
+    if code in EXIT_API_SET:
+        logger.info(f"{code}属于待退出状态")
+        EXIT_API_SET.remove(code)
+        api = API_REF.pop(code)
+        logger.info(f"{code}运行exit")
+        ok = api.exit()
+        logger.info(f"{code} exit运行结果:{ok}")
+    if code not in API_REF:
+        md_server = sys_utils.get_env('CTP_MD_SERVER', 'tcp://180.168.146.187:10211')
+        broker_id = sys_utils.get_env('CTP_BROKER_ID', '9999')
+        user_id = sys_utils.get_env('CTP_USER_ID', '224850')
+        password = sys_utils.get_env('CTP_PASSWORD', 'q9yvcbw7RuHv@Zs')
+        auth_code = sys_utils.get_env('CTP_AUTH_CODE', '0000000000000000')
+        app_id = sys_utils.get_env('CTP_APP_ID', 'simnow_client_test')
+        redis_host = sys_utils.get_env('REDIS_HOST', '192.168.1.60')
+        redis_port = sys_utils.get_env('REDIS_PORT', '16379')
+        redis_client = redis.StrictRedis(
+            host=redis_host,
+            port=int(redis_port),
+            db=0,
+            password=None,
+            encoding='utf-8',
+            decode_responses=True
+        )
+        md_api = TestMdApi(address=md_server, user_id=user_id, password=password, broker_id=broker_id,
+                           auth_code=auth_code, app_id=app_id, redis_client=redis_client, name=code)
+        md_api.connect()
+        API_REF[code] = md_api
+    return API_REF[code]
