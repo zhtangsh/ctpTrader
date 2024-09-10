@@ -1,6 +1,5 @@
 import json
 import logging
-import time
 from pathlib import Path
 from threading import Event
 
@@ -8,6 +7,7 @@ import redis
 from vnpy_ctp.api import MdApi
 
 from utils import sys_utils
+from kafka import KafkaProducer
 
 # vnpy_ctp
 
@@ -15,11 +15,12 @@ logger = logging.getLogger(__name__)
 
 API_REF = {}
 EXIT_API_SET = set()
+CTP_LIVE_TICK_TOPIC = sys_utils.get_env('CTP_LIVE_TICK_TOPIC', 'ctpLiveTickTest')
 
 
 class TestMdApi(MdApi):
-    def __init__(self, address, user_id, password, broker_id, auth_code, app_id, redis_client: redis.StrictRedis,
-                 name='md', group='ctptest'):
+    def __init__(self, address, user_id, password, broker_id, auth_code, app_id, redis_client: redis.StrictRedis = None,
+                 name='md', group='ctptest', persist_type='redis', kafka_client: KafkaProducer = None):
         super().__init__()
         self.address: str = address
         self.user_id: str = user_id
@@ -45,6 +46,8 @@ class TestMdApi(MdApi):
 
         self.req_id = 0  # 自增ID
         self.redis_client = redis_client
+        self.persist_type = persist_type
+        self.kafka_client = kafka_client
 
     def connect(self) -> None:
         """
@@ -213,7 +216,10 @@ class TestMdApi(MdApi):
         if key is None:
             logger.info(f"行情数据有误,内容:{data}")
             return
-        self.redis_client.set(key, json.dumps(data))
+        if self.persist_type == 'redis':
+            self.redis_client.set(key, json.dumps(data))
+        elif self.persist_type == 'kafka':
+            self.kafka_client.send(CTP_LIVE_TICK_TOPIC, data)
         self.set_subscribe_event(key)
 
 
@@ -233,18 +239,27 @@ def get_market_data(code: str = 'md') -> TestMdApi:
         password = sys_utils.get_env('CTP_PASSWORD', 'q9yvcbw7RuHv@Zs')
         auth_code = sys_utils.get_env('CTP_AUTH_CODE', '0000000000000000')
         app_id = sys_utils.get_env('CTP_APP_ID', 'simnow_client_test')
-        redis_host = sys_utils.get_env('REDIS_HOST', '192.168.1.60')
-        redis_port = sys_utils.get_env('REDIS_PORT', '16379')
-        redis_client = redis.StrictRedis(
-            host=redis_host,
-            port=int(redis_port),
-            db=0,
-            password=None,
-            encoding='utf-8',
-            decode_responses=True
-        )
+        persist_type = sys_utils.get_env('PERSIST_TYPE', 'redis')
+        redis_client = None
+        kafka_client = None
+        if persist_type == 'redis':
+            redis_host = sys_utils.get_env('REDIS_HOST', '192.168.1.60')
+            redis_port = sys_utils.get_env('REDIS_PORT', '16379')
+            redis_client = redis.StrictRedis(
+                host=redis_host,
+                port=int(redis_port),
+                db=0,
+                password=None,
+                encoding='utf-8',
+                decode_responses=True
+            )
+        elif persist_type == 'kafka':
+            kafka_url = sys_utils.get_env('KAFKA_URL', '192.168.1.60:9092')
+            kafka_client = KafkaProducer(bootstrap_servers=kafka_url,
+                                         value_serializer=lambda v: json.dumps(v).encode('utf-8'))
         md_api = TestMdApi(address=md_server, user_id=user_id, password=password, broker_id=broker_id,
-                           auth_code=auth_code, app_id=app_id, redis_client=redis_client, name=code)
+                           auth_code=auth_code, app_id=app_id, persist_type=persist_type, redis_client=redis_client,
+                           kafka_client=kafka_client, name=code)
         md_api.connect()
         API_REF[code] = md_api
     return API_REF[code]

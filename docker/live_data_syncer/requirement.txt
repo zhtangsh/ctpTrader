@@ -1,0 +1,5 @@
+vnpy
+vnpy_ctp
+redis
+kafka-python
+rqdatac==2.11.11.4
