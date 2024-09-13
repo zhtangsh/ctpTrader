@@ -193,9 +193,11 @@ class TickDataSyncerMdApi(MdApi):
         if key is None:
             logger.info(f"行情数据有误,内容:{data}")
             return
+        logging.debug(f"persist_type={self.persist_type}")
         if self.persist_type == 'redis':
             self.redis_client.set(key, json.dumps(data))
         elif self.persist_type == 'kafka':
+            logging.debug(f"send to kafka:topic:{CTP_LIVE_TICK_TOPIC},data:{data}")
             self.kafka_client.send(CTP_LIVE_TICK_TOPIC, data)
 
 
@@ -208,13 +210,13 @@ def get_market_data(code: str = 'md') -> TickDataSyncerMdApi:
         ok = api.exit()
         logger.info(f"{code} exit运行结果:{ok}")
     if code not in API_REF:
-        md_server = sys_utils.get_env('CTP_MD_SERVER', 'tcp://180.168.146.187:10211')
-        broker_id = sys_utils.get_env('CTP_BROKER_ID', '9999')
-        user_id = sys_utils.get_env('CTP_USER_ID', '224850')
+        md_server = sys_utils.get_env('CTP_MD_SERVER', 'tcp://180.166.103.37:51218')
+        broker_id = sys_utils.get_env('CTP_BROKER_ID', '6666')
+        user_id = sys_utils.get_env('CTP_USER_ID', '66680162')
         password = sys_utils.get_env('CTP_PASSWORD', 'q9yvcbw7RuHv@Zs')
-        auth_code = sys_utils.get_env('CTP_AUTH_CODE', '0000000000000000')
-        app_id = sys_utils.get_env('CTP_APP_ID', 'simnow_client_test')
-        persist_type = sys_utils.get_env('PERSIST_TYPE', 'redis')
+        auth_code = sys_utils.get_env('CTP_AUTH_CODE', 'SXEX6UAU35NPVAZY')
+        app_id = sys_utils.get_env('CTP_APP_ID', 'client_dlzh0222_alpha')
+        persist_type = sys_utils.get_env('PERSIST_TYPE', 'kafka')
         redis_client = None
         kafka_client = None
         if persist_type == 'redis':
