@@ -38,7 +38,8 @@ def entrypoint():
     #         rq_contract_list = fetch_contract_list(underlying=underlying, maturity=maturity)
     #         contract_list = parse_rq_contract(rq_contract_list, underlying)
     #         target_contract_list.extend(contract_list)
-    target_contract_list = [f"TTO2411-{dir}-{105 + 0.25 * price}" for dir in ['C', 'P'] for price in range(10)]
+    # target_contract_list = [f"TTO2411-{dir}-{105 + 0.25 * price}" for dir in ['C', 'P'] for price in range(10)]
+    target_contract_list = ['TTO2411-C-105', 'TTO2411-P-105', 'TTO2411-C-106', 'TTO2411-P-106']
     logger.info(f"订阅的合约列表{target_contract_list}")
     md = get_market_data()
     for contract in target_contract_list:
@@ -48,5 +49,5 @@ def entrypoint():
 
 
 if __name__ == '__main__':
-    sys_utils.logging_config()
+    sys_utils.logging_config(logging.DEBUG)
     entrypoint()

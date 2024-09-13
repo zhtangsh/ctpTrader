@@ -1,5 +1,6 @@
 vnpy
 vnpy_ctp
+vnpy_ctptest
 redis
 kafka-python
 rqdatac==2.11.11.4

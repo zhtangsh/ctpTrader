@@ -4,7 +4,7 @@ from pathlib import Path
 from threading import Event
 
 import redis
-from vnpy_ctp.api import MdApi
+from vnpy_ctptest.api import MdApi
 
 from utils import sys_utils
 from kafka import KafkaProducer
@@ -189,6 +189,7 @@ class TickDataSyncerMdApi(MdApi):
         深度行情通知
         """
         key = data.get('InstrumentID')
+        logger.debug(f"onRtnDepthMarketData:数据{data}")
         if key is None:
             logger.info(f"行情数据有误,内容:{data}")
             return
