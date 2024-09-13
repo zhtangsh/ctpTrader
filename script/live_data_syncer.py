@@ -77,13 +77,18 @@ def entrypoint():
     target_contract_list.extend(tl_2501)
     target_contract_list.extend(tl_2503)
 
-
     # target_contract_list = ['TTO2411-C-105.00', 'TTO2411-P-105.00']
     logger.info(f"订阅的合约列表{target_contract_list}")
     md = get_market_data()
     for contract in target_contract_list:
         md.subscribe(contract)
+    today = datetime.date.today()
+    close_datetime = datetime.datetime(today.year, today.month, today.day, 15, 45)
     while True:
+        now = datetime.datetime.now()
+        if now > close_datetime:
+            logger.info("收盘，推出程序")
+            break
         time.sleep(100)
 
 
