@@ -93,5 +93,5 @@ def entrypoint():
 
 
 if __name__ == '__main__':
-    sys_utils.logging_config(logging.DEBUG)
+    sys_utils.logging_config()
     entrypoint()
