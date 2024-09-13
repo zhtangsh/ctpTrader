@@ -14,11 +14,13 @@ ENV CTP_AUTH_CODE=0000000000000000
 ENV CTP_APP_ID=simnow_client_test
 ENV PERSIST_TYPE=kafka
 ENV LANG=C.UTF-8
+ENV UNDERLYING_LIST='["IO","HO"]'
+ENV MATURITY_LIST='["2409","2410","2411"]'
 
 WORKDIR /dropbox
 ADD ctpTrader/docker/live_data_syncer/requirement.txt requirement.txt
 RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources && apt-get update && apt-get -y install locales locales-all
-RUN pip install -i $MIRROR -r requirement.txt
+RUN pip install --no-cache-dir -i $MIRROR -r requirement.txt
 
 ADD ctpTrader ctpTrader
 
