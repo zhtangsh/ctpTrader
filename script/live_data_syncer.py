@@ -38,8 +38,47 @@ def entrypoint():
     #         rq_contract_list = fetch_contract_list(underlying=underlying, maturity=maturity)
     #         contract_list = parse_rq_contract(rq_contract_list, underlying)
     #         target_contract_list.extend(contract_list)
-    # target_contract_list = [f"TTO2411-{dir}-{105 + 0.25 * price}" for dir in ['C', 'P'] for price in range(10)]
-    target_contract_list = ['TTO2411-C-105', 'TTO2411-P-105', 'TTO2411-C-106', 'TTO2411-P-106']
+    target_contract_list = []
+    t_2411 = [f"TTO2411-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
+    t_2412 = [f"TTO2412-{dir}-{100 + 0.5 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
+    t_2501 = [f"TTO2501-{dir}-{100 + 0.5 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
+    t_2503 = [f"TTO2503-{dir}-{100 + 0.5 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
+    ts_2411 = [f"TSO2411-{dir}-{100 + 0.1 * price:.2f}" for dir in ['C', 'P'] for price in range(40)]
+    ts_2412 = [f"TSO2412-{dir}-{100 + 0.1 * price:.2f}" for dir in ['C', 'P'] for price in range(40)]
+    ts_2501 = [f"TSO2501-{dir}-{100 + 0.1 * price:.2f}" for dir in ['C', 'P'] for price in range(40)]
+    ts_2503 = [f"TSO2503-{dir}-{100 + 0.1 * price:.2f}" for dir in ['C', 'P'] for price in range(40)]
+    tf_2411 = [f"TFO2411-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
+    tf_2412 = [f"TFO2412-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
+    tf_2501 = [f"TFO2501-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
+    tf_2503 = [f"TFO2503-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
+
+    tl_2411 = [f"TLO2411-{dir}-{100 + 0.5 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
+    tl_2412 = [f"TLO2412-{dir}-{100 + 1 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
+    tl_2501 = [f"TLO2501-{dir}-{100 + 1 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
+    tl_2503 = [f"TLO2503-{dir}-{100 + 1 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
+
+    target_contract_list.extend(t_2411)
+    target_contract_list.extend(t_2412)
+    target_contract_list.extend(t_2501)
+    target_contract_list.extend(t_2503)
+
+    target_contract_list.extend(ts_2411)
+    target_contract_list.extend(ts_2412)
+    target_contract_list.extend(ts_2501)
+    target_contract_list.extend(ts_2503)
+
+    target_contract_list.extend(tf_2411)
+    target_contract_list.extend(tf_2412)
+    target_contract_list.extend(tf_2501)
+    target_contract_list.extend(tf_2503)
+
+    target_contract_list.extend(tl_2411)
+    target_contract_list.extend(tl_2412)
+    target_contract_list.extend(tl_2501)
+    target_contract_list.extend(tl_2503)
+
+
+    # target_contract_list = ['TTO2411-C-105.00', 'TTO2411-P-105.00']
     logger.info(f"订阅的合约列表{target_contract_list}")
     md = get_market_data()
     for contract in target_contract_list:
