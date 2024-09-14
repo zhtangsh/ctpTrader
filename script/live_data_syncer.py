@@ -83,9 +83,10 @@ def build_contract_month_list():
 
 
 def build_price_list(settlement_price, price_step, price_limit):
-    lowest_price = (settlement_price * (1 - price_limit / 100) // price_step - 1) * price_step
-    highest_price = (settlement_price * (1 + price_limit / 100) // price_step + 1) * price_step
-    return [lowest_price + i * price_step for i in range(int((highest_price - lowest_price) // price_step))]
+    lowest_price = round((settlement_price * (1 - price_limit / 100) // price_step - 1) * price_step, 2)
+    highest_price = round((settlement_price * (1 + price_limit / 100) // price_step + 1) * price_step, 2)
+    return [round(lowest_price + i * price_step, 2) for i in
+            range(int((highest_price - lowest_price) // price_step) + 1)]
 
 
 def get_previous_settlement_price(underlying_code):
@@ -102,7 +103,7 @@ def build_option_code_list(option_prefix, future_prefix, price_step_list, price_
     res = []
     for i in range(4):
         month_date = contract_month_list[i]
-        month = month_date.strftime("%Y%m")
+        month = month_date.strftime("%y%m")
         underlying_month_str = underlying_month(month_date).strftime("%y%m")
         underlying_code = f"{future_prefix}{underlying_month_str}"
         settlement_price = get_previous_settlement_price(underlying_code)
