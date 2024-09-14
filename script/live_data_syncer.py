@@ -1,18 +1,41 @@
+# from ctpApi.md_v2 import get_market_data
+import pandas as pd
+
 from ctpApi.md_v2 import get_market_data
 from utils import sys_utils
+from utils.datasource import DbEngineFactory
 import time
 import datetime
-import json
 import logging
 
 logger = logging.getLogger(__name__)
 
-
-def fetch_contract_list(underlying, maturity):
-    import rqdatac as rq
-    today = datetime.date.today() - datetime.timedelta(days=1)
-    rq.init()
-    return rq.options.get_contracts(underlying=underlying, maturity=maturity, trading_date=today.strftime('%Y%m%d'))
+OPTION_CODE_CONFIG_LIST = [
+    {
+        'option_prefix': 'TSO',
+        'future_prefix': 'TS',
+        'price_step': 0.1,
+        'price_limit': 0.5
+    },
+    {
+        'option_prefix': 'TFO',
+        'future_prefix': 'TF',
+        'price_step': 0.25,
+        'price_limit': 1.2
+    },
+    {
+        'option_prefix': 'TTO',
+        'future_prefix': 'T',
+        'price_step': [0.25, 0.5, 0.5, 0.5],
+        'price_limit': 2.0
+    },
+    {
+        'option_prefix': 'TLO',
+        'future_prefix': 'TL',
+        'price_step': [0.5, 1, 1, 1],
+        'price_limit': 3.5
+    }
+]
 
 
 def parse_rq_contract(contract_list, underlying):
@@ -27,57 +50,83 @@ def parse_rq_contract(contract_list, underlying):
     return res
 
 
+def add_month(cur: datetime.date, month_count=1):
+    if cur.month < 12 - month_count + 1:
+        return datetime.date(cur.year, cur.month + month_count, cur.day)
+    return datetime.date(cur.year + 1, (cur.month + month_count) % 12, cur.day)
+
+
+def next_quarter_month(cur: datetime.date):
+    if cur.month == 12:
+        return datetime.date(cur.year + 1, ((cur.month // 3 + 1) * 3) % 12, cur.day)
+    return datetime.date(cur.year, (cur.month // 3 + 1) * 3, cur.day)
+
+
+def underlying_month(cur: datetime.date):
+    if cur.month % 3 == 0:
+        return datetime.date(cur.year, cur.month, cur.day)
+    return datetime.date(cur.year, (cur.month // 3 + 1) * 3, cur.day)
+
+
+def build_contract_month_list():
+    today = datetime.date.today()
+    first_day_of_month = datetime.date(today.year, today.month, 1)
+    first_day_weekday = first_day_of_month.isoweekday()
+    kitten_day = datetime.date(today.year, today.month, 13 - (first_day_weekday % 7))
+    if today > kitten_day:
+        contract_date1 = add_month(first_day_of_month, month_count=2)
+    else:
+        contract_date1 = add_month(first_day_of_month, month_count=1)
+    contract_date2 = add_month(contract_date1)
+    contract_date3 = add_month(contract_date2)
+    contract_date4 = next_quarter_month(contract_date3)
+    return [contract_date1, contract_date2, contract_date3, contract_date4]
+
+
+def build_price_list(settlement_price, price_step, price_limit):
+    lowest_price = (settlement_price * (1 - price_limit / 100) // price_step - 1) * price_step
+    highest_price = (settlement_price * (1 + price_limit / 100) // price_step + 1) * price_step
+    return [lowest_price + i * price_step for i in range(int((highest_price - lowest_price) // price_step))]
+
+
+def get_previous_settlement_price(underlying_code):
+    sql = f"select * from metrics_day where order_book_id='{underlying_code}' order by date desc limit 1"
+    engine = DbEngineFactory.engine_clickhouse_rqdata_future()
+    df = pd.read_sql(sql, con=engine)
+    return df['settlement'].iloc[0]
+
+
+def build_option_code_list(option_prefix, future_prefix, price_step_list, price_limit):
+    contract_month_list = build_contract_month_list()
+    if not isinstance(price_step_list, list):
+        price_step_list = [price_step_list for i in range(4)]
+    res = []
+    for i in range(4):
+        month_date = contract_month_list[i]
+        month = month_date.strftime("%Y%m")
+        underlying_month_str = underlying_month(month_date).strftime("%y%m")
+        underlying_code = f"{future_prefix}{underlying_month_str}"
+        settlement_price = get_previous_settlement_price(underlying_code)
+        price_step = price_step_list[i]
+        price_list = build_price_list(settlement_price, price_step, price_limit)
+        res.extend([f"{option_prefix}{month}-{dir}-{price:.2f}" for dir in ['C', 'P'] for price in price_list])
+    return res
+
+
+def get_option_code_list():
+    res = []
+    for option_code_config in OPTION_CODE_CONFIG_LIST:
+        option_prefix = option_code_config['option_prefix']
+        future_prefix = option_code_config['future_prefix']
+        price_step = option_code_config['price_step']
+        price_limit = option_code_config['price_limit']
+        tmp = build_option_code_list(option_prefix, future_prefix, price_step, price_limit)
+        res.extend(tmp)
+    return res
+
+
 def entrypoint():
-    # underlying_list_str = sys_utils.get_env('UNDERLYING_LIST', '["IO","HO"]')
-    # maturity_list_str = sys_utils.get_env('MATURITY_LIST', '["2409","2410","2411"]')
-    # underlying_list = json.loads(underlying_list_str)
-    # maturity_list = json.loads(maturity_list_str)
-    # target_contract_list = []
-    # for underlying in underlying_list:
-    #     for maturity in maturity_list:
-    #         rq_contract_list = fetch_contract_list(underlying=underlying, maturity=maturity)
-    #         contract_list = parse_rq_contract(rq_contract_list, underlying)
-    #         target_contract_list.extend(contract_list)
-    target_contract_list = []
-    t_2411 = [f"TTO2411-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
-    t_2412 = [f"TTO2412-{dir}-{100 + 0.5 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
-    t_2501 = [f"TTO2501-{dir}-{100 + 0.5 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
-    t_2503 = [f"TTO2503-{dir}-{100 + 0.5 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
-    ts_2411 = [f"TSO2411-{dir}-{100 + 0.1 * price:.2f}" for dir in ['C', 'P'] for price in range(40)]
-    ts_2412 = [f"TSO2412-{dir}-{100 + 0.1 * price:.2f}" for dir in ['C', 'P'] for price in range(40)]
-    ts_2501 = [f"TSO2501-{dir}-{100 + 0.1 * price:.2f}" for dir in ['C', 'P'] for price in range(40)]
-    ts_2503 = [f"TSO2503-{dir}-{100 + 0.1 * price:.2f}" for dir in ['C', 'P'] for price in range(40)]
-    tf_2411 = [f"TFO2411-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
-    tf_2412 = [f"TFO2412-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
-    tf_2501 = [f"TFO2501-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
-    tf_2503 = [f"TFO2503-{dir}-{100 + 0.25 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
-
-    tl_2411 = [f"TLO2411-{dir}-{100 + 0.5 * price:.2f}" for dir in ['C', 'P'] for price in range(50)]
-    tl_2412 = [f"TLO2412-{dir}-{100 + 1 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
-    tl_2501 = [f"TLO2501-{dir}-{100 + 1 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
-    tl_2503 = [f"TLO2503-{dir}-{100 + 1 * price:.2f}" for dir in ['C', 'P'] for price in range(30)]
-
-    target_contract_list.extend(t_2411)
-    target_contract_list.extend(t_2412)
-    target_contract_list.extend(t_2501)
-    target_contract_list.extend(t_2503)
-
-    target_contract_list.extend(ts_2411)
-    target_contract_list.extend(ts_2412)
-    target_contract_list.extend(ts_2501)
-    target_contract_list.extend(ts_2503)
-
-    target_contract_list.extend(tf_2411)
-    target_contract_list.extend(tf_2412)
-    target_contract_list.extend(tf_2501)
-    target_contract_list.extend(tf_2503)
-
-    target_contract_list.extend(tl_2411)
-    target_contract_list.extend(tl_2412)
-    target_contract_list.extend(tl_2501)
-    target_contract_list.extend(tl_2503)
-
-    # target_contract_list = ['TTO2411-C-105.00', 'TTO2411-P-105.00']
+    target_contract_list = get_option_code_list()
     logger.info(f"订阅的合约列表{target_contract_list}")
     md = get_market_data()
     for contract in target_contract_list:

@@ -4,3 +4,5 @@ vnpy_ctptest
 redis
 kafka-python
 rqdatac==2.11.11.4
+sqlalchemy==1.4.39
+clickhouse-sqlalchemy==0.2.5
