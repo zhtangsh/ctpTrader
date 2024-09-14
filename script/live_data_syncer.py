@@ -1,4 +1,3 @@
-# from ctpApi.md_v2 import get_market_data
 import pandas as pd
 
 from ctpApi.md_v2 import get_market_data

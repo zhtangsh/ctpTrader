@@ -59,7 +59,7 @@ class TestMdApi(MdApi):
             self.createFtdcMdApi(f"{str(path)}\\{self.name}")
             self.registerFront(self.address)
             self.init()
-            self.initial_event.wait()
+            self.initial_event.wait(timeout=60)
             self.connect_status = True
 
     def login(self) -> None:
