@@ -173,7 +173,8 @@ class TestTdApi(TdApi):
             price,
             volume,
             direction,
-            offset
+            offset,
+            price_type
     ):
         """
         下单
@@ -183,6 +184,7 @@ class TestTdApi(TdApi):
         :param volume: 数量
         :param direction: 方向
         :param offset: 开平
+        :param price_type: 价格类型
         :return:
         """
         self.check_connection()
@@ -193,7 +195,7 @@ class TestTdApi(TdApi):
             "ExchangeID": exchange,
             "LimitPrice": price,
             "VolumeTotalOriginal": volume,
-            "OrderPriceType": THOST_FTDC_OPT_LimitPrice,
+            "OrderPriceType": price_type,
             "Direction": direction,
             "CombOffsetFlag": offset,
             "OrderRef": str(req_id),

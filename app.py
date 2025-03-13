@@ -36,9 +36,6 @@ jsonrpc = JSONRPC(app, "/api", enable_web_browsable_api=True)
 load_dotenv()
 
 
-
-
-
 @jsonrpc.method("accountInfo.getTradingAccount")
 def get_account_info() -> List[CtpTradingAccount]:
     trader = get_trader()
@@ -74,10 +71,11 @@ def order_stock(
         price: float,
         volume: int,
         direction: str,
-        offset: str
+        offset: str,
+        price_type: str
 ) -> str:
     trader = get_trader()
-    res = trader.send_order(symbol, exchange, price, volume, direction, offset)
+    res = trader.send_order(symbol, exchange, price, volume, direction, offset, price_type)
     return res
 
 
@@ -104,6 +102,7 @@ def live_tick_data(
 def is_trading_day() -> bool:
     xshg = xcals.get_calendar("XSHG")
     return xshg.is_session(datetime.date.today())
+
 
 level = logging.INFO
 sys_utils.logging_config(level=level)
