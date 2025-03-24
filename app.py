@@ -98,6 +98,15 @@ def live_tick_data(
     return data
 
 
+@jsonrpc.method("data.live_tick_data_v2")
+def live_tick_data_v2(
+        symbol: List[str]
+) -> Dict[str, any]:
+    market_data = get_market_data()
+    data = market_data.live_tick_data_v2(symbol)
+    return data
+
+
 @jsonrpc.method("utils.is_trading_day")
 def is_trading_day() -> bool:
     xshg = xcals.get_calendar("XSHG")

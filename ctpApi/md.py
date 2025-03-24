@@ -99,6 +99,17 @@ class TestMdApi(MdApi):
         logger.debug(f"从redis读取数据,值为:{value}")
         return json.loads(value)
 
+    def live_tick_data_v2(self, symbol_list):
+        self.check_connection()
+        res = []
+        for symbol in symbol_list:
+            self.subscribe(symbol)
+            logger.debug("尝试从redis读取数据")
+            value = self.redis_client.get(symbol)
+            logger.debug(f"从redis读取数据,值为:{value}")
+            res.append(json.loads(value))
+        return res
+
     def onFrontConnected(self) -> None:
         """
         服务器连接成功回报
