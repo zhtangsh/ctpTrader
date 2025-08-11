@@ -42,6 +42,12 @@ def get_account_info() -> List[CtpTradingAccount]:
     res = trader.query_account()
     return [CtpTradingAccount(r) for r in res]
 
+@jsonrpc.method("accountInfo.settlement_info_confirm")
+def get_account_info() -> None:
+    trader = get_trader()
+    res = trader.settlement_info_confirm()
+    return res
+
 
 @jsonrpc.method("tradeInfo.getOrderList")
 def get_order_list() -> List[CtpOrder]:
