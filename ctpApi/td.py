@@ -1,5 +1,6 @@
 import json
 import logging
+from datetime import datetime, timedelta
 from pathlib import Path
 from threading import Event
 # vnpy_ctp
@@ -392,7 +393,7 @@ class TestTdApi(TdApi):
 
     # 订单状态改变回调
     def onRtnOrder(self, data):
-        logger.info(f"onRtnOrder:data={data}")
+        logger.debug(f"onRtnOrder:data={data}")
         # 只管当前 SessionID 的单子
         if data['SessionID'] == self.session_id and data['OrderSysID']:
             req_id = data['OrderRef']
@@ -403,7 +404,16 @@ class TestTdApi(TdApi):
 
     def onRtnTrade(self, data: dict) -> None:
         """成交数据推送"""
-        logger.info(f"onRtnTrade:data={data}")
+        logger.debug(f"onRtnTrade:data={data}")
+        trade_date = data.get("TradeDate")
+        trade_time = data.get("TradeTime")
+        dt = datetime.strptime(f"{trade_date} {trade_time}", '%Y%m%d %H:%M:%S')
+        # 计算时间差
+        time_diff = datetime.now() - dt
+        # 判断是否超过 1 小时
+        if time_diff > timedelta(hours=1):
+            logger.warning(f"onRtnTrade:接收到过期数据，不发送到kafka。data={data}，")
+            return
         self.kafka_client.send(CTP_TRADE_TOPIC, data)
 
     def query_trade(self) -> List[CtpTrade]:
