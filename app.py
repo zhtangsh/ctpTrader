@@ -121,7 +121,7 @@ def is_trading_day() -> bool:
 
 level = logging.INFO
 sys_utils.logging_config(level=level)
-logging.getLogger("ctpApi.td").setLevel(logging.DEBUG)
-logging.getLogger("ctpApi.md").setLevel(logging.DEBUG)
+# logging.getLogger("ctpApi.td").setLevel(logging.DEBUG)
+# logging.getLogger("ctpApi.md").setLevel(logging.DEBUG)
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
