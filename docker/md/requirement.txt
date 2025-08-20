@@ -1,0 +1,9 @@
+vnpy==3.9.2
+vnpy_ctp==6.6.9.1
+kafka-python
+redis
+python-dotenv
+flask==2.2.5
+flask_jsonrpc==2.2.2
+exchange_calendars
+gunicorn
