@@ -101,13 +101,19 @@ class TestMdApi(MdApi):
 
     def live_tick_data_v2(self, symbol_list):
         self.check_connection()
-        res = []
+        # 先订阅
         for symbol in symbol_list:
             self.subscribe(symbol)
-            logger.debug("尝试从redis读取数据")
-            value = self.redis_client.get(symbol)
-            logger.debug(f"从redis读取数据,值为:{value}")
-            res.append(json.loads(value))
+
+        # 从redis读取数据
+        values = self.redis_client.mget(symbol_list)
+        # === 3. 处理结果 ===
+        res = []
+        for value in values:
+            if value is None:
+                continue
+            else:
+                res.append(json.loads(value))
         return res
 
     def onFrontConnected(self) -> None:

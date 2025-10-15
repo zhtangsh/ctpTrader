@@ -14,8 +14,15 @@ ENV CTP_APP_ID=simnow_client_test
 ENV LANG=C.UTF-8
 
 WORKDIR /dropbox
+# 使用传统 sources.list 避免 deb822 格式问题
+RUN rm -f /etc/apt/sources.list.d/*.sources && \
+    echo "deb https://mirrors.aliyun.com/debian bookworm main contrib non-free" > /etc/apt/sources.list && \
+    echo "deb https://mirrors.aliyun.com/debian bookworm-updates main contrib non-free" >> /etc/apt/sources.list && \
+    echo "deb https://mirrors.aliyun.com/debian-security bookworm-security main contrib non-free" >> /etc/apt/sources.list
+# 安装依赖
+RUN apt-get update --allow-insecure-repositories && apt-get -y install --allow-unauthenticated locales locales-all sudo dmidecode iproute2 net-tools procps && rm -rf /var/lib/apt/lists/*
+
 ADD ctpTrader/docker/md/requirement.txt requirement.txt
-RUN sed -i 's/deb.debian.org/mirrors.ustc.edu.cn/g' /etc/apt/sources.list.d/debian.sources && apt-get update && apt-get -y install locales locales-all
 RUN pip install --no-cache-dir -i $MIRROR -r requirement.txt
 
 ADD ctpTrader ctpTrader

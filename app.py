@@ -107,7 +107,7 @@ def live_tick_data(
 @jsonrpc.method("data.live_tick_data_v2")
 def live_tick_data_v2(
         symbol: List[str]
-) -> Dict[str, any]:
+) -> List[Dict[str, any]]:
     market_data = get_market_data()
     data = market_data.live_tick_data_v2(symbol)
     return data

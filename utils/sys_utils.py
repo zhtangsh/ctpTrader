@@ -34,7 +34,7 @@ def get_folder_path(folder_name: str) -> Path:
     """
     folder_path: Path = PROJECT_DIR.joinpath(folder_name)
     if not folder_path.exists():
-        folder_path.mkdir()
+        folder_path.mkdir(parents=True, exist_ok=True)
     return folder_path
 
 
